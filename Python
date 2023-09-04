@@ -1,0 +1,73 @@
+# import modules
+from typing import DefaultDict
+import spacy
+nlp = spacy.load("en_core_web_sm")
+import numpy as np
+import pandas as pd
+import matplotlib as plt
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# import CSV file
+hotelrevs = pd.read_csv(r'C:\Users\katie\python\hotel_arena_reviews_cleaned_condensed_pythonized.csv', index_col = 0, dtype={
+    'Review_Date':'string',
+    'Review_Month':'int',
+    'Review_Day':'int',
+    'Review_Year':'int',
+    'Reviewer_Nationality':'string',
+    'Review_Total_Negative_Word_Counts':'int',
+    'Review_Total_Positive_Word_Counts':'int',
+    'Total_Number_of_Reviews_Reviewer_Has_Given':'int',
+    'Review_Sentiment':'float',
+    'Reviewer_Score':'float',
+    'Days_Since_Review':'int',
+    'Group_Type':'float',
+    'Trip_Type':'float',
+    'Room_Type':'float',
+    'With_a_Pet':'bool',
+    'Nights_Stayed':'int',
+    'Mobile_Device_Submit':'bool',
+    'Negative_Review':'string',
+    'Positive_Review':'string'
+})
+hotelrevs = hotelrevs.dropna()
+
+# define function for tfidf analysis
+def preprocess_text(text):
+    doc = nlp(text)
+    tokens = [token.text.lower() for token in doc if token.is_alpha and not token.is_stop]
+    return " ".join(tokens
+
+# get top 50 keywords and counts from Positive_Review column and export
+tfidf_vectorizer_pos = TfidfVectorizer()
+hotelrevs['cleaned_positive_reviews'] = hotelrevs['Positive_Review'].apply(preprocess_text)
+tfidf_pos = tfidf_vectorizer_pos.fit_transform(hotelrevs['cleaned_positive_reviews'])
+mean_tfidf_scores_pos = np.mean(tfidf_pos, axis=0)
+mean_tfidf_scores_pos = mean_tfidf_scores_pos.tolist()[0]
+term_tfidf_map_pos = dict(zip(tfidf_vectorizer_pos.get_feature_names_out(), mean_tfidf_scores_pos))
+sorted_terms_pos = sorted(term_tfidf_map_pos.items(), key=lambda x: x[1], reverse=True)
+top_keywords_pos = [term for term, score in sorted_terms_pos[:50]]
+keyword_counts_pos = {word: 0 for word in top_keywords_pos}
+for text in hotelrevs['Positive_Review']:
+    for word in top_keywords_pos:
+        keyword_counts_pos[word] += text.split().count(word)
+keyword_counts_posDF = pd.DataFrame.from_dict(keyword_counts_pos.items())
+keyword_counts_posDF.to_csv(r'C:\Users\katie\OneDrive\Documents\keyword_counts_pos')
+
+# get top 50 keywords and counts from Negative_Review column and export
+tfidf_vectorizer_neg = TfidfVectorizer()
+hotelrevs['cleaned_negative_reviews'] = hotelrevs['Negative_Review'].apply(preprocess_text)
+tfidf_neg = tfidf_vectorizer_neg.fit_transform(hotelrevs['cleaned_negative_reviews'])
+mean_tfidf_scores_neg = np.mean(tfidf_neg, axis=0)
+mean_tfidf_scores_neg = mean_tfidf_scores_neg.tolist()[0]
+term_tfidf_map_neg = dict(zip(tfidf_vectorizer_neg.get_feature_names_out(), mean_tfidf_scores_neg))
+sorted_terms_neg = sorted(term_tfidf_map_neg.items(), key=lambda x: x[1], reverse=True)
+top_keywords_neg = [term for term, score in sorted_terms_neg[:50]]
+keywords_hotelrevs_neg = [top_keywords_neg]
+keyword_counts_neg = {word: 0 for word in top_keywords_neg}
+for text in hotelrevs['Negative_Review']:
+    for word in top_keywords_neg:
+        keyword_counts_neg[word] += text.split().count(word)
+keyword_counts_negDF = pd.DataFrame.from_dict(keyword_counts_neg.items())
+keyword_counts_negDF.to_csv(r'C:\Users\katie\OneDrive\Documents\keyword_counts_neg')
+
+
