@@ -1,0 +1,120 @@
+from typing import DefaultDict
+import spacy
+nlp = spacy.load("en_core_web_sm")
+import numpy as np
+import pandas as pd
+import matplotlib as plt
+from sklearn.feature_extraction.text import TfidfVectorizer
+from spacytextblob.spacytextblob import SpacyTextBlob
+spacy_text_blob = SpacyTextBlob(nlp)
+nlp.add_pipe("spacytextblob")
+
+hotelrevs = pd.read_csv(r'C:\Users\katie\OneDrive\Documents\hotelrevsb13.csv', index_col = 0, dtype={
+    'Review_Date':'string',
+    'Review_Month':'int',
+    'Review_Day':'int',
+    'Review_Year':'int',
+    'Reviewer_Nationality':'string',
+    'Review_Total_Negative_Word_Counts':'int',
+    'Review_Total_Positive_Word_Counts':'int',
+    'Total_Number_of_Reviews_Reviewer_Has_Given':'int',
+    'Review_Sentiment':'float',
+    'Reviewer_Score':'float',
+    'Days_Since_Review':'int',
+    'Group_Type':'float',
+    'Trip_Type':'float',
+    'Room_Type':'float',
+    'With_a_Pet':'bool',
+    'Nights_Stayed':'int',
+    'Mobile_Device_Submit':'bool',
+    'Negative_Review':'string',
+    'Positive_Review':'string'
+}).dropna()
+
+Review_Sentiment_Dict = {4.1:'positive', 4.2:'negative', 4.3:'both'}
+Group_Type_Dict = {1.1:'couple', 1.2:'family with young children', 1.3:'solo traveler', 1.4:'group', 1.5:'family with older children', 1.6:'travelers with friends'}
+Trip_Type_Dict = {2.1:'leisure trip', 2.2:'business trip', 2.3:'unspecified'}
+Room_Type_Dict = {3.1:'duplex double room', 3.2:'suite', 3.3:'duplex twin room', 3.4:'large king room', 3.5:'standard double room', 3.6:'2 rooms'}
+
+def preprocess_text(text):
+    doc = nlp(text)
+    tokens = [token.text.lower() for token in doc if token.is_alpha and not token.is_stop]
+    return " ".join(tokens)
+    
+pos_hotelrevs = hotelrevs['Positive_Review'].tolist()
+neg_hotelrevs = hotelrevs['Negative_Review'].tolist()
+
+pos_rev_sentiment_polarity = []
+pos_rev_sentiment_subjectivity = []
+pos_rev_sent_label = []
+neg_rev_sentiment_polarity = []
+neg_rev_sentiment_subjectivity = []
+neg_rev_sent_label = []
+
+for text in pos_hotelrevs:
+    doc = nlp(text)
+    doc_ext = spacy_text_blob(doc)
+    polarity = doc_ext._.polarity
+    subjectivity = doc_ext._.subjectivity
+    pos_rev_sentiment_polarity.append(polarity)
+    pos_rev_sentiment_subjectivity.append(subjectivity)
+    if polarity >= 0.3:
+        sent_label = 'Positive'
+    elif polarity < 0.3 and polarity > -0.31:
+        sent_label = 'Neutral'
+    else:
+        sent_label = 'Negative'
+    pos_rev_sent_label.append(sent_label)
+
+for text in neg_hotelrevs:
+    doc = nlp(text)
+    doc_ext = spacy_text_blob(doc)
+    polarity = doc_ext._.polarity
+    subjectivity = doc_ext._.subjectivity
+    neg_rev_sentiment_polarity.append(polarity)
+    neg_rev_sentiment_subjectivity.append(subjectivity)
+    if polarity >= 0.3:
+        sent_label = 'Positive'
+    elif polarity < 0.3 and polarity > -0.31:
+        sent_label = 'Neutral'
+    else:
+        sent_label = 'Negative'
+    neg_rev_sent_label.append(sent_label)
+
+prsc_dict = {'positive_review': pos_hotelrevs, 'positive_review_sentiment_label': pos_rev_sent_label, 'positive_review_sentiment_polarity': pos_rev_sentiment_polarity, 'positive_review_sentiment_subjectivity': pos_rev_sentiment_subjectivity}
+nrsc_dict = {'negative_review': neg_hotelrevs, 'negative_review_sentiment_label': neg_rev_sent_label, 'negative_review_sentiment_polarity': neg_rev_sentiment_polarity, 'negative_review_sentiment_subjectivity': neg_rev_sentiment_subjectivity}
+positive_review_sentiment_calc = pd.DataFrame(prsc_dict)
+negative_review_sentiment_calc = pd.DataFrame(nrsc_dict)
+positive_review_sentiment_calc.to_csv(r'C:\Users\katie\OneDrive\Documents\positive_review_sentiment_calc')
+negative_review_sentiment_calc.to_csv(r'C:\Users\katie\OneDrive\Documents\negative_review_sentiment_calc')
+
+tfidf_vectorizer_pos = TfidfVectorizer()
+hotelrevs['cleaned_positive_reviews'] = hotelrevs['Positive_Review'].apply(preprocess_text)
+tfidf_pos = tfidf_vectorizer_pos.fit_transform(hotelrevs['cleaned_positive_reviews'])
+mean_tfidf_scores_pos = np.mean(tfidf_pos, axis=0)
+mean_tfidf_scores_pos = mean_tfidf_scores_pos.tolist()[0]
+term_tfidf_map_pos = dict(zip(tfidf_vectorizer_pos.get_feature_names_out(), mean_tfidf_scores_pos))
+sorted_terms_pos = sorted(term_tfidf_map_pos.items(), key=lambda x: x[1], reverse=True)
+top_keywords_pos = [term for term, score in sorted_terms_pos[:50]]
+keyword_counts_pos = {word: 0 for word in top_keywords_pos}
+for text in hotelrevs['Positive_Review']:
+    for word in top_keywords_pos:
+        keyword_counts_pos[word] += text.split().count(word)
+keyword_counts_posDF = pd.DataFrame.from_dict(keyword_counts_pos.items())
+keyword_counts_posDF.to_csv(r'C:\Users\katie\OneDrive\Documents\keyword_counts_pos')
+
+tfidf_vectorizer_neg = TfidfVectorizer()
+hotelrevs['cleaned_negative_reviews'] = hotelrevs['Negative_Review'].apply(preprocess_text)
+tfidf_neg = tfidf_vectorizer_neg.fit_transform(hotelrevs['cleaned_negative_reviews'])
+mean_tfidf_scores_neg = np.mean(tfidf_neg, axis=0)
+mean_tfidf_scores_neg = mean_tfidf_scores_neg.tolist()[0]
+term_tfidf_map_neg = dict(zip(tfidf_vectorizer_neg.get_feature_names_out(), mean_tfidf_scores_neg))
+sorted_terms_neg = sorted(term_tfidf_map_neg.items(), key=lambda x: x[1], reverse=True)
+top_keywords_neg = [term for term, score in sorted_terms_neg[:50]]
+keywords_hotelrevs_neg = [top_keywords_neg]
+keyword_counts_neg = {word: 0 for word in top_keywords_neg}
+for text in hotelrevs['Negative_Review']:
+    for word in top_keywords_neg:
+        keyword_counts_neg[word] += text.split().count(word)
+keyword_counts_negDF = pd.DataFrame.from_dict(keyword_counts_neg.items())
+keyword_counts_negDF.to_csv(r'C:\Users\katie\OneDrive\Documents\keyword_counts_neg')
